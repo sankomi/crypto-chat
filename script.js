@@ -1,89 +1,84 @@
-(async () => {
-
-	let subtle = crypto.subtle;
+async function generateKeys() {
 	let algorithm ={
 		name: "RSA-OAEP",
 		modulusLength: 2048,
 		publicExponent: new Uint8Array([1, 0, 1]),
 		hash: "SHA-256",
 	};
+	let keyPair = await crypto.subtle.generateKey(algorithm, true, ["encrypt", "decrypt"]);
 
-	//generate keys
-	let keyPair = await subtle.generateKey(algorithm, true, ["encrypt", "decrypt"]);
-	let privateKey = await subtle.exportKey("pkcs8", keyPair.privateKey)
-	let privateKeyString = [
-		"-----BEGIN PRIVATE KEY-----",
-		btoa(String.fromCharCode(...new Uint8Array(privateKey))),
-		"-----END PRIVATE KEY-----",
-	].join("\n");
-	let publicKey = await subtle.exportKey("spki", keyPair.publicKey)
-	let publicKeyString = [
-		"-----BEGIN PUBLIC KEY-----",
-		btoa(String.fromCharCode(...new Uint8Array(publicKey))),
-		"-----END PUBLIC KEY-----",
-	].join("\n");
+	let privateKey = await crypto.subtle.exportKey("pkcs8", keyPair.privateKey)
+		.then(key => [
+			"-----BEGIN PRIVATE KEY-----",
+			btoa(String.fromCharCode(...new Uint8Array(key))),
+			"-----END PRIVATE KEY-----",
+		].join("\n"));
+	let publicKey = await crypto.subtle.exportKey("spki", keyPair.publicKey)
+		.then(key => [
+			"-----BEGIN PUBLIC KEY-----",
+			btoa(String.fromCharCode(...new Uint8Array(key))),
+			"-----END PUBLIC KEY-----",
+		].join("\n"));
 
-	//key arraybuffers
-	let privateKeyArrayBuffer = (() => {
-		let lines = privateKeyString.split("\n");
-		let base64 = "";
-		for (let i = 0; i < lines.length; i++) {
-			let line = lines[i].trim();
-			if (line.length === 0) continue;
-			if (line.includes("-----BEGIN PRIVATE KEY-----")) continue;
-			if (line.includes("-----END PRIVATE KEY-----")) continue;
-			base64 += line;
-		}
-		let string = atob(base64);
-		let bytes = new Uint8Array(string.length);
-		for (let i = 0; i < string.length; i++) {
-			bytes[i] = string.charCodeAt(i);
-		}
-		return bytes.buffer;
-	})();
-	let publicKeyArrayBuffer = (() => {
-		let lines = publicKeyString.split("\n");
-		let base64 = "";
-		for (let i = 0; i < lines.length; i++) {
-			let line = lines[i].trim();
-			if (line.length === 0) continue;
-			if (line.includes("-----BEGIN PUBLIC KEY-----")) continue;
-			if (line.includes("-----END PUBLIC KEY-----")) continue;
-			base64 += line;
-		}
-		let string = atob(base64);
-		let bytes = new Uint8Array(string.length);
-		for (let i = 0; i < string.length; i++) {
-			bytes[i] = string.charCodeAt(i);
-		}
-		return bytes.buffer;
-	})();
+	return {privateKey, publicKey};
+}
 
-	//encrypt text
-	let string = "dragons!";
-	let importedPublicKey = await subtle.importKey("spki", publicKeyArrayBuffer, algorithm, true, ["encrypt"]);
-	let encoded = new TextEncoder().encode(string).buffer;
-	let encrypted = await subtle.encrypt({name: "RSA-OAEP"}, importedPublicKey, encoded);
-	let encryptedString = btoa(String.fromCharCode(...new Uint8Array(encrypted)));
+function getKeyArrayBuffer(key) {
+	let lines = key.split("\n");
+	let base64 = "";
+	for (let i = 0; i < lines.length; i++) {
+		let line = lines[i].trim();
+		if (line.length === 0) continue;
+		if (line.match(/-----BEGIN (PRIVATE|PUBLIC) KEY-----/)) continue;
+		if (line.match(/-----END (PRIVATE|PUBLIC) KEY-----/)) continue;
+		base64 += line;
+	}
+	let string = atob(base64);
+	let bytes = new Uint8Array(string.length);
+	for (let i = 0; i < string.length; i++) {
+		bytes[i] = string.charCodeAt(i);
+	}
+	return bytes.buffer;
+}
 
-	//decrypt text
-	let importedPrivateKey = await subtle.importKey("pkcs8", privateKeyArrayBuffer, algorithm, true, ["decrypt"]);
-	let encryptedArrayBuffer = (() => {
-		let string = atob(encryptedString);
-		let bytes = new Uint8Array(string.length);
-		for (let i = 0; i < string.length; i++) {
-			bytes[i] = string.charCodeAt(i);
-		}
-		return bytes.buffer;
-	})();
-	let decrypted = await subtle.decrypt({name: "RSA-OAEP"}, importedPrivateKey, encryptedArrayBuffer);
-	let decryptedString = String.fromCharCode(...new Uint8Array(decrypted));
+async function encrypt(plain, key) {
+	let algorithm ={
+		name: "RSA-OAEP",
+		modulusLength: 2048,
+		publicExponent: new Uint8Array([1, 0, 1]),
+		hash: "SHA-256",
+	};
+	let arrayBuffer = getKeyArrayBuffer(key);
+	let importedKey = await crypto.subtle.importKey("spki", arrayBuffer, algorithm, true, ["encrypt"]);
+	let encoded = new TextEncoder().encode(plain).buffer;
+	let encrypted = await crypto.subtle.encrypt({name: "RSA-OAEP"}, importedKey, encoded);
+	return btoa(String.fromCharCode(...new Uint8Array(encrypted)));
+}
 
-	//print
-	console.log(`private key: ${privateKeyString}`);
-	console.log(`public key: ${publicKeyString}`);
-	console.log(`text: ${string}`);
-	console.log(`encrypted: ${encryptedString}`);
-	console.log(`decrypted: ${decryptedString}`);
+async function decrypt(cipher, key) {
+	let algorithm ={
+		name: "RSA-OAEP",
+		modulusLength: 2048,
+		publicExponent: new Uint8Array([1, 0, 1]),
+		hash: "SHA-256",
+	};
+	let arrayBuffer = getKeyArrayBuffer(key);
+	let importedKey = await crypto.subtle.importKey("pkcs8", arrayBuffer, algorithm, true, ["decrypt"]);
+	let string = atob(cipher);
+	let bytes = new Uint8Array(string.length);
+	for (let i = 0; i < string.length; i++) {
+		bytes[i] = string.charCodeAt(i);
+	}
+	let decrypted = await crypto.subtle.decrypt({name: "RSA-OAEP"}, importedKey, bytes.buffer);
+	return String.fromCharCode(...new Uint8Array(decrypted));
+}
 
-})();
+generateKeys()
+	.then(async ({privateKey, publicKey}) => {
+		let text = "dragons!";
+		let cipher = await encrypt(text, publicKey);
+		let decipher = await decrypt(cipher, privateKey);
+
+		console.log(text, cipher, decipher);
+	})
+	.catch(console.error);
