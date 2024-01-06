@@ -1,3 +1,58 @@
+function write(text) {
+	let textNode = document.createTextNode(text + " ");
+	document.body.appendChild(textNode);
+}
+
+class Socket {
+
+	constructor() {
+		this.socket = new WebSocket(location.origin.replace(/^http/, "ws") + "/ws");
+		this.socket.onopen = this.onOpen;
+		this.socket.onclose = this.onClose;
+		this.socket.onmessage = this.onMessage;
+		this.socket.onerror = this.onError;
+	}
+
+	send(text) {
+		if (!this.socket || this.socket.readyState !== 1) return;
+
+		this.socket.send(text);
+	}
+
+	close() {
+		if (!this.socket || this.socket.readyState !== 1) return;
+
+		this.socket.close();
+	}
+
+	onOpen(event) {
+		write("opened!");
+	}
+
+	onClose(event) {
+		write("closed!");
+	}
+
+	onMessage(event) {
+		write(event.data);
+	}
+
+	onError(event) {
+		write("error!");
+		console.error(event);
+	}
+
+}
+
+(() => {
+	let texts = "lorem ipsum dolor sit amet".split(" ");
+	let socket = new Socket();
+	setInterval(() => {
+		let text = texts[Math.floor(Math.random() * texts.length)];
+		socket.send(text);
+	}, 1000);
+})();
+
 async function generateRsaKeys() {
 	let algorithm ={
 		name: "RSA-OAEP",
@@ -73,15 +128,15 @@ async function decryptRsa(cipher, key) {
 	return String.fromCharCode(...new Uint8Array(decrypted));
 }
 
-generateRsaKeys()
-	.then(async ({privateKey, publicKey}) => {
-		let text = "dragons!";
-		let cipher = await encryptRsa(text, publicKey);
-		let decipher = await decryptRsa(cipher, privateKey);
-
-		console.log(text, cipher, decipher);
-	})
-	.catch(console.error);
+// generateRsaKeys()
+// 	.then(async ({privateKey, publicKey}) => {
+// 		let text = "dragons!";
+// 		let cipher = await encryptRsa(text, publicKey);
+// 		let decipher = await decryptRsa(cipher, privateKey);
+//
+// 		console.log(text, cipher, decipher);
+// 	})
+// 	.catch(console.error);
 
 
 async function generateAesKey() {
@@ -135,11 +190,11 @@ async function decryptAes(cipher, key, iv) {
 	return String.fromCharCode(...new Uint8Array(decrypted));
 }
 
-generateAesKey()
-	.then(async ({key, string}) => {
-		let text = "dragons!";
-		let {cipher, iv} = await encryptAes(text, string);
-		let decipher = await decryptAes(cipher, string, iv);
-
-		console.log(text, iv, cipher, decipher);
-	});
+// generateAesKey()
+// 	.then(async ({key, string}) => {
+// 		let text = "dragons!";
+// 		let {cipher, iv} = await encryptAes(text, string);
+// 		let decipher = await decryptAes(cipher, string, iv);
+//
+// 		console.log(text, iv, cipher, decipher);
+// 	});

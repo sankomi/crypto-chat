@@ -1,0 +1,4 @@
+spring:
+  web:
+    resources:
+      static-locations[0]: "file:src/main/resources/static/"
