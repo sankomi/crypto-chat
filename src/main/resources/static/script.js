@@ -1,22 +1,37 @@
-function write(text) {
+function write(text, colour = null) {
 	let textNode = document.createTextNode(text + " ");
-	document.body.appendChild(textNode);
+	if (colour) {
+		let span = document.createElement("span");
+		span.style.color = colour;
+		span.appendChild(textNode);
+		document.body.appendChild(span);
+	} else {
+		document.body.appendChild(textNode);
+	}
 }
 
 class Socket {
 
-	constructor() {
+	constructor(privateKey, publicKey) {
+		this.privateKey = privateKey;
+		this.publicKey = publicKey;
+
 		this.socket = new WebSocket(location.origin.replace(/^http/, "ws") + "/ws");
 		this.socket.onopen = this.onOpen;
 		this.socket.onclose = this.onClose;
-		this.socket.onmessage = this.onMessage;
+		this.socket.onmessage = this.onMessage.bind(this);
 		this.socket.onerror = this.onError;
 	}
 
-	send(text) {
+	async send(text) {
 		if (!this.socket || this.socket.readyState !== 1) return;
 
-		this.socket.send(text);
+		let {aesKey, string} = await generateAesKey();
+		let {cipher, iv}  = await encryptAes(text, string);
+		let key = await encryptRsa(string, this.publicKey);
+		let data = JSON.stringify({key, iv, text: cipher});
+
+		this.socket.send(data);
 	}
 
 	close() {
@@ -33,8 +48,22 @@ class Socket {
 		write("closed!");
 	}
 
-	onMessage(event) {
-		write(event.data);
+	async onMessage(event) {
+		let json;
+		try {
+			json = JSON.parse(event.data);
+			let key = await decryptRsa(json.key, this.privateKey);
+			let text = await decryptAes(json.text, key, json.iv);
+
+			write(text);
+		} catch (err) {
+			if (err instanceof SyntaxError) {
+				console.error("json parse fail");
+				write("[json parse fail]", "#f00");
+			} else if (err instanceof DOMException) {
+				write(json.text, "#ccc");
+			}
+		}
 	}
 
 	onError(event) {
@@ -44,12 +73,13 @@ class Socket {
 
 }
 
-(() => {
+(async () => {
 	let texts = "lorem ipsum dolor sit amet".split(" ");
-	let socket = new Socket();
-	setInterval(() => {
+	let {privateKey, publicKey} = await generateRsaKeys();
+	let socket = new Socket(privateKey, publicKey);
+	setInterval(async () => {
 		let text = texts[Math.floor(Math.random() * texts.length)];
-		socket.send(text);
+		await socket.send(text);
 	}, 1000);
 })();
 
