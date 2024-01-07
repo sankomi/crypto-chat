@@ -24,13 +24,15 @@ public class SocketHandler extends TextWebSocketHandler {
 
 	@Override
 	protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-		sockets.entrySet().forEach(socket -> {
-			try {
-				socket.getValue().sendMessage(message);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		});
+		synchronized(sockets) {
+			sockets.entrySet().forEach(socket -> {
+				try {
+					socket.getValue().sendMessage(message);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			});
+		}
 	}
 
 }
