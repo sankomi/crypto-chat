@@ -1,37 +1,48 @@
 function write(text, colour = null) {
 	let textNode = document.createTextNode(text + " ");
+	let div = document.createElement("div");
 	if (colour) {
-		let span = document.createElement("span");
-		span.style.color = colour;
-		span.appendChild(textNode);
-		document.body.appendChild(span);
-	} else {
-		document.body.appendChild(textNode);
+		div.style.color = colour;
 	}
+	div.appendChild(textNode);
+	document.body.appendChild(div);
+	window.scroll(0, document.body.scrollHeight);
 }
 
 class Socket {
 
-	constructor(privateKey, publicKey) {
+	constructor(username, privateKey, publicKey) {
+		this.username = username;
 		this.privateKey = privateKey;
 		this.publicKey = publicKey;
+		this.publicKeys = new Map();
 
 		this.socket = new WebSocket(location.origin.replace(/^http/, "ws") + "/ws");
-		this.socket.onopen = this.onOpen;
+		this.socket.onopen = this.onOpen.bind(this);
 		this.socket.onclose = this.onClose;
 		this.socket.onmessage = this.onMessage.bind(this);
 		this.socket.onerror = this.onError;
 	}
 
-	async send(text) {
+	async send(text, username) {
 		if (!this.socket || this.socket.readyState !== 1) return;
+		if (username && !this.publicKeys.has(username)) return;
+
+		let publicKey = this.publicKeys.get(username) || this.publicKey;
 
 		let {aesKey, string} = await generateAesKey();
 		let {cipher, iv}  = await encryptAes(text, string);
-		let key = await encryptRsa(string, this.publicKey);
-		let data = JSON.stringify({key, iv, text: cipher});
+		let key = await encryptRsa(string, publicKey);
+		let data = JSON.stringify({
+			type: "MESSAGE",
+			username: this.username,
+			key,
+			iv,
+			text: cipher,
+		});
 
 		this.socket.send(data);
+		write(this.username + ": " + text);
 	}
 
 	close() {
@@ -41,6 +52,11 @@ class Socket {
 	}
 
 	onOpen(event) {
+		this.socket.send(JSON.stringify({
+			type: "PUBLIC_KEY",
+			username: this.username,
+			publicKey: this.publicKey,
+		}));
 		write("opened!");
 	}
 
@@ -52,17 +68,31 @@ class Socket {
 		let json;
 		try {
 			json = JSON.parse(event.data);
-			let key = await decryptRsa(json.key, this.privateKey);
-			let text = await decryptAes(json.text, key, json.iv);
-
-			write(text);
 		} catch (err) {
 			if (err instanceof SyntaxError) {
 				console.error("json parse fail");
 				write("[json parse fail]", "#f00");
-			} else if (err instanceof DOMException) {
-				write(json.text, "#ccc");
 			}
+		}
+
+		switch (json.type) {
+			case "MESSAGE":
+				try {
+					let key = await decryptRsa(json.key, this.privateKey);
+					let text = await decryptAes(json.text, key, json.iv);
+
+					write(json.username + ": " + text);
+				} catch (err) {
+					if (err instanceof DOMException) {
+						write(json.username + ": " + json.text, "#ccc");
+					}
+				}
+				break;
+			case "PUBLIC_KEY":
+				this.publicKeys.set(json.username, json.publicKey);
+
+				write(json.username + " joined", "orangered");
+				break;
 		}
 	}
 
@@ -73,14 +103,31 @@ class Socket {
 
 }
 
+const form = document.createElement("form");
+const usernameInput = document.createElement("input");
+usernameInput.placeholder = "username";
+const textInput = document.createElement("input");
+textInput.placeholder = "message";
+const sendButton = document.createElement("button");
+sendButton.textContent = "send";
+document.body.appendChild(form);
+form.appendChild(usernameInput);
+form.appendChild(textInput);
+form.appendChild(sendButton);
+
 (async () => {
 	let texts = "lorem ipsum dolor sit amet".split(" ");
 	let {privateKey, publicKey} = await generateRsaKeys();
-	let socket = new Socket(privateKey, publicKey);
-	setInterval(async () => {
-		let text = texts[Math.floor(Math.random() * texts.length)];
-		await socket.send(text);
-	}, 1000);
+	let username = Array.from(crypto.getRandomValues(new Uint8Array(2)), v => v.toString(16).padStart(2, "0")).join("").toUpperCase();
+	let socket = new Socket(username, privateKey, publicKey);
+	form.addEventListener("submit", async event => {
+		event.preventDefault();
+		let username = usernameInput.value;
+		let text = textInput.value;
+		if (!text || text.trim().length === 0) return;
+		textInput.value = "";
+		await socket.send(text, username);
+	});
 })();
 
 async function generateRsaKeys() {

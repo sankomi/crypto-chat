@@ -24,8 +24,12 @@ public class SocketHandler extends TextWebSocketHandler {
 
 	@Override
 	protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+		String senderId = session.getId();
+
 		synchronized(sockets) {
 			sockets.entrySet().forEach(socket -> {
+				if (socket.getValue().getId().equals(senderId)) return;
+
 				try {
 					socket.getValue().sendMessage(message);
 				} catch (IOException e) {
