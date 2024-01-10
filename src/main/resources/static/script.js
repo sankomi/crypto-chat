@@ -1,3 +1,7 @@
+const SEND_PUBLIC_KEY = "sendpublickey";
+const GET_PUBLIC_KEY = "getpublickey";
+const MESSAGE = "message";
+
 function write(text, colour = null) {
 	let textNode = document.createTextNode(text + " ");
 	let div = document.createElement("div");
@@ -24,6 +28,14 @@ class Socket {
 		this.socket.onerror = this.onError;
 	}
 
+	async requestPublicKey(username) {
+		let data = JSON.stringify({
+			type: GET_PUBLIC_KEY,
+			username,
+		});
+		this.socket.send(data);
+	}
+
 	async send(text, username) {
 		if (!this.socket || this.socket.readyState !== 1) return;
 		if (username && !this.publicKeys.has(username)) return;
@@ -34,7 +46,7 @@ class Socket {
 		let {cipher, iv}  = await encryptAes(text, string);
 		let key = await encryptRsa(string, publicKey);
 		let data = JSON.stringify({
-			type: "MESSAGE",
+			type: MESSAGE,
 			username: this.username,
 			key,
 			iv,
@@ -53,15 +65,16 @@ class Socket {
 
 	onOpen(event) {
 		this.socket.send(JSON.stringify({
-			type: "PUBLIC_KEY",
+			type: SEND_PUBLIC_KEY,
 			username: this.username,
 			publicKey: this.publicKey,
 		}));
-		write("opened!");
+		write("opened!", "royalblue");
+		write("username is " + this.username, "royalblue");
 	}
 
 	onClose(event) {
-		write("closed!");
+		write("closed!", "royalblue");
 	}
 
 	async onMessage(event) {
@@ -72,11 +85,12 @@ class Socket {
 			if (err instanceof SyntaxError) {
 				console.error("json parse fail");
 				write("[json parse fail]", "#f00");
+				return;
 			}
 		}
 
 		switch (json.type) {
-			case "MESSAGE":
+			case MESSAGE:
 				try {
 					let key = await decryptRsa(json.key, this.privateKey);
 					let text = await decryptAes(json.text, key, json.iv);
@@ -88,10 +102,10 @@ class Socket {
 					}
 				}
 				break;
-			case "PUBLIC_KEY":
+			case GET_PUBLIC_KEY:
 				this.publicKeys.set(json.username, json.publicKey);
 
-				write(json.username + " joined", "orangered");
+				write("received " + json.username + "'s public key", "orangered");
 				break;
 		}
 	}
@@ -102,6 +116,15 @@ class Socket {
 	}
 
 }
+
+const keyForm = document.createElement("form");
+const keyUsernameInput = document.createElement("input");
+keyUsernameInput.placeholder = "username";
+const getKeyButton = document.createElement("button");
+getKeyButton.textContent = "request public key";
+document.body.appendChild(keyForm);
+keyForm.appendChild(keyUsernameInput);
+keyForm.appendChild(getKeyButton);
 
 const form = document.createElement("form");
 const usernameInput = document.createElement("input");
@@ -120,6 +143,15 @@ form.appendChild(sendButton);
 	let {privateKey, publicKey} = await generateRsaKeys();
 	let username = Array.from(crypto.getRandomValues(new Uint8Array(2)), v => v.toString(16).padStart(2, "0")).join("").toUpperCase();
 	let socket = new Socket(username, privateKey, publicKey);
+
+	keyForm.addEventListener("submit", async event => {
+		event.preventDefault();
+		let username = keyUsernameInput.value;
+		if (!username || username.trim().length === 0) return;
+		keyUsernameInput.value = "";
+		await socket.requestPublicKey(username);
+	});
+
 	form.addEventListener("submit", async event => {
 		event.preventDefault();
 		let username = usernameInput.value;
