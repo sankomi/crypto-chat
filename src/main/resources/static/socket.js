@@ -1,5 +1,6 @@
 import crypto from "/crypto.js";
 
+const GET_USERNAMES = "getusernames";
 const SEND_PUBLIC_KEY = "sendpublickey";
 const GET_PUBLIC_KEY = "getpublickey";
 const MESSAGE = "message";
@@ -76,6 +77,7 @@ export default class Socket extends EventTarget {
 		}));
 		this.write("opened!", "royalblue");
 		this.write("username is " + this.username, "royalblue");
+		this.getUsernames();
 	}
 
 	onClose(event) {
@@ -113,12 +115,23 @@ export default class Socket extends EventTarget {
 
 				this.write("received " + json.username + "'s public key", "orangered");
 				break;
+			case GET_USERNAMES:
+				this.dispatchEvent(new CustomEvent("usernames", {detail: {usernames: json.usernames}}));
+				break;
 		}
 	}
 
 	onError(event) {
 		this.write("error!");
 		console.error(event);
+	}
+
+	async getUsernames() {
+		if (!this.socket || this.socket.readyState !== 1) return;
+		let data = JSON.stringify({type: GET_USERNAMES});
+		this.socket.send(data);
+
+		setTimeout(() => this.getUsernames(), 1000);
 	}
 
 }

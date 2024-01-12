@@ -1,6 +1,6 @@
 package sanko.cryptochat.socket;
 
-import java.util.Map;
+import java.util.*; //Map, List
 import java.util.stream.Collectors;
 import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -17,6 +17,7 @@ public class SocketHandler extends TextWebSocketHandler {
 	private static final ConcurrentHashMap<String, String> usernames = new ConcurrentHashMap<>();
 	private static final ConcurrentHashMap<String, String> publicKeys = new ConcurrentHashMap<>();
 
+	private static final String GET_USERNAMES = "getusernames";
 	private static final String SEND_PUBLIC_KEY = "sendpublickey";
 	private static final String GET_PUBLIC_KEY = "getpublickey";
 	private static final String MESSAGE = "message";
@@ -41,6 +42,19 @@ public class SocketHandler extends TextWebSocketHandler {
 		Map<String, Object> json = parser.parseMap(message.getPayload());
 
 		switch ((String) json.get("type")) {
+			case GET_USERNAMES:
+				List<String> names = usernames.entrySet()
+					.stream()
+					.filter(e -> !e.getKey().equals(sessionId))
+					.map(e -> String.format("\"%s\"", e.getValue()))
+					.collect(Collectors.toList());
+				String usernameString = String.format(
+					"{'type': '%s', 'usernames': [%s]}".replaceAll("'", "\""),
+					GET_USERNAMES, String.join(",", names)
+				);
+				TextMessage usernameMessage = new TextMessage(usernameString);
+				session.sendMessage(usernameMessage);
+				break;
 			case SEND_PUBLIC_KEY:
 				usernames.put(sessionId, (String) json.get("username"));
 				publicKeys.put(sessionId, (String) json.get("publicKey"));

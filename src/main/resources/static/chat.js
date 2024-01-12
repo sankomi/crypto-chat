@@ -16,6 +16,7 @@ let username = params.get("username");
 let socket = new Socket(username);
 socket.addEventListener("text", event => write(event.detail));
 socket.addEventListener("close", event => window.location = "/");
+socket.addEventListener("usernames", event => updateUsernames(event.detail));
 
 const keyForm = document.getElementById("key-form");
 const keyUsernameInput = document.getElementById("key-username");
@@ -41,3 +42,13 @@ chatForm.addEventListener("submit", async event => {
 
 	await socket.send(text, username);
 });
+
+const usernameList = document.getElementById("username-list");
+function updateUsernames({usernames}) {
+	usernameList.innerHTML = "";
+	usernames.forEach(username => {
+		let li = document.createElement("li");
+		li.textContent = username;
+		usernameList.appendChild(li);
+	});
+}
