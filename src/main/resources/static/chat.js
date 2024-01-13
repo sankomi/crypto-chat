@@ -16,26 +16,16 @@ let username = params.get("username");
 let socket = new Socket(username);
 socket.addEventListener("text", event => write(event.detail));
 socket.addEventListener("close", event => window.location = "/");
+socket.addEventListener("publickeys", event => updatePublicKeys(event.detail));
 socket.addEventListener("usernames", event => updateUsernames(event.detail));
 
-const keyForm = document.getElementById("key-form");
-const keyUsernameInput = document.getElementById("key-username");
-keyForm.addEventListener("submit", async event => {
-	event.preventDefault();
-
-	let username = keyUsernameInput.value;
-	if (!username || username.trim().length === 0) return;
-
-	await socket.requestPublicKey(username);
-});
-
 const chatForm = document.getElementById("chat-form");
-const chatUsernameInput = document.getElementById("chat-username");
+const chatUsernameSelect = document.getElementById("chat-username");
 const chatTextInput = document.getElementById("chat-text");
 chatForm.addEventListener("submit", async event => {
 	event.preventDefault();
 
-	let username = chatUsernameInput.value;
+	let username = chatUsernameSelect.value;
 	let text = chatTextInput.value;
 	if (!text || text.trim().length === 0) return;
 	chatTextInput.value = "";
@@ -43,12 +33,31 @@ chatForm.addEventListener("submit", async event => {
 	await socket.send(text, username);
 });
 
+function updatePublicKeys({usernames}) {
+	let current = chatUsernameSelect.value;
+
+	chatUsernameSelect.innerHTML = "";
+	let option = document.createElement("option");
+	chatUsernameSelect.appendChild(option);
+	usernames.forEach(username => {
+		let option = document.createElement("option");
+		option.value = username;
+		option.textContent = username;
+		chatUsernameSelect.appendChild(option);
+	});
+
+	chatUsernameSelect.value = current;
+}
+
 const usernameList = document.getElementById("username-list");
 function updateUsernames({usernames}) {
 	usernameList.innerHTML = "";
 	usernames.forEach(username => {
 		let li = document.createElement("li");
-		li.textContent = username;
+		let button = document.createElement("button");
+		button.textContent = username;
+		button.addEventListener("click", event => socket.requestPublicKey(username));
+		li.appendChild(button);
 		usernameList.appendChild(li);
 	});
 }

@@ -76,7 +76,6 @@ export default class Socket extends EventTarget {
 			publicKey: this.publicKey,
 		}));
 		this.write("opened!", "royalblue");
-		this.write("username is " + this.username, "royalblue");
 		this.getUsernames();
 	}
 
@@ -113,6 +112,9 @@ export default class Socket extends EventTarget {
 			case GET_PUBLIC_KEY:
 				this.publicKeys.set(json.username, json.publicKey);
 
+				this.dispatchEvent(new CustomEvent("publickeys", {detail: {
+					usernames: Array.from(this.publicKeys.keys()),
+				}}));
 				this.write("received " + json.username + "'s public key", "orangered");
 				break;
 			case GET_USERNAMES:
