@@ -1,6 +1,8 @@
 import crypto from "/crypto.js";
 
-const GET_USERNAMES = "getusernames";
+const USERNAMES = "usernames";
+const CONNECT = "connect";
+const CLOSE = "close";
 const SEND_PUBLIC_KEY = "sendpublickey";
 const GET_PUBLIC_KEY = "getpublickey";
 const MESSAGE = "message";
@@ -8,9 +10,10 @@ const MESSAGE = "message";
 
 export default class Socket extends EventTarget {
 
-	constructor(username, privateKey, publicKey) {
+	constructor(username) {
 		super();
 		this.username = username;
+		this.usernames = [];
 		this.publicKeys = new Map();
 		this.generateKeys();
 	}
@@ -76,7 +79,6 @@ export default class Socket extends EventTarget {
 			publicKey: this.publicKey,
 		}));
 		this.write("opened!", "royalblue");
-		this.getUsernames();
 	}
 
 	onClose(event) {
@@ -117,8 +119,20 @@ export default class Socket extends EventTarget {
 				}}));
 				this.write("received " + json.username + "'s public key", "orangered");
 				break;
-			case GET_USERNAMES:
-				this.dispatchEvent(new CustomEvent("usernames", {detail: {usernames: json.usernames}}));
+			case USERNAMES:
+				this.usernames = json.usernames;
+				this.dispatchEvent(new CustomEvent("usernames", {detail: {usernames: this.usernames}}));
+				break;
+			case CONNECT:
+				this.usernames.push(json.username);
+				this.dispatchEvent(new CustomEvent("usernames", {detail: {usernames: this.usernames}}));
+				break;
+			case CLOSE:
+				let index = this.usernames.indexOf(json.username);
+				if (~index) {
+					this.usernames.splice(index, 1);
+				}
+				this.dispatchEvent(new CustomEvent("usernames", {detail: {usernames: this.usernames}}));
 				break;
 		}
 	}
@@ -126,14 +140,6 @@ export default class Socket extends EventTarget {
 	onError(event) {
 		this.write("error!");
 		console.error(event);
-	}
-
-	async getUsernames() {
-		if (!this.socket || this.socket.readyState !== 1) return;
-		let data = JSON.stringify({type: GET_USERNAMES});
-		this.socket.send(data);
-
-		setTimeout(() => this.getUsernames(), 1000);
 	}
 
 }

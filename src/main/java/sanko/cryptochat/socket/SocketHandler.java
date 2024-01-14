@@ -17,7 +17,9 @@ public class SocketHandler extends TextWebSocketHandler {
 	private static final ConcurrentHashMap<String, String> usernames = new ConcurrentHashMap<>();
 	private static final ConcurrentHashMap<String, String> publicKeys = new ConcurrentHashMap<>();
 
-	private static final String GET_USERNAMES = "getusernames";
+	private static final String USERNAMES = "usernames";
+	private static final String CONNECT = "connect";
+	private static final String CLOSE = "close";
 	private static final String SEND_PUBLIC_KEY = "sendpublickey";
 	private static final String GET_PUBLIC_KEY = "getpublickey";
 	private static final String MESSAGE = "message";
@@ -30,6 +32,25 @@ public class SocketHandler extends TextWebSocketHandler {
 	@Override
 	public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
 		String sessionId = session.getId();
+		String username = usernames.get(sessionId);
+
+		synchronized(sockets) {
+			sockets.entrySet().forEach(socket -> {
+				if (socket.getValue().getId().equals(sessionId)) return;
+
+				String closeString = String.format(
+					"{'type': '%s', 'username': '%s'}".replaceAll("'", "\""),
+					CLOSE, username
+				);
+
+				try {
+					socket.getValue().sendMessage(new TextMessage(closeString));
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			});
+		}
+
 		sockets.remove(sessionId);
 		usernames.remove(sessionId);
 		publicKeys.remove(sessionId);
@@ -41,8 +62,30 @@ public class SocketHandler extends TextWebSocketHandler {
 		JsonParser parser = JsonParserFactory.getJsonParser();
 		Map<String, Object> json = parser.parseMap(message.getPayload());
 
+		String username = (String) json.get("username");
+
 		switch ((String) json.get("type")) {
-			case GET_USERNAMES:
+			case SEND_PUBLIC_KEY:
+				usernames.put(sessionId, username);
+				publicKeys.put(sessionId, (String) json.get("publicKey"));
+
+				synchronized(sockets) {
+					sockets.entrySet().forEach(socket -> {
+						if (socket.getValue().getId().equals(sessionId)) return;
+
+						String connectString = String.format(
+							"{'type': '%s', 'username': '%s'}".replaceAll("'", "\""),
+							CONNECT, username
+						);
+
+						try {
+							socket.getValue().sendMessage(new TextMessage(connectString));
+						} catch (IOException e) {
+							e.printStackTrace();
+						}
+					});
+				}
+
 				List<String> names = usernames.entrySet()
 					.stream()
 					.filter(e -> !e.getKey().equals(sessionId))
@@ -50,17 +93,12 @@ public class SocketHandler extends TextWebSocketHandler {
 					.collect(Collectors.toList());
 				String usernameString = String.format(
 					"{'type': '%s', 'usernames': [%s]}".replaceAll("'", "\""),
-					GET_USERNAMES, String.join(",", names)
+					USERNAMES, String.join(",", names)
 				);
 				TextMessage usernameMessage = new TextMessage(usernameString);
 				session.sendMessage(usernameMessage);
 				break;
-			case SEND_PUBLIC_KEY:
-				usernames.put(sessionId, (String) json.get("username"));
-				publicKeys.put(sessionId, (String) json.get("publicKey"));
-				break;
 			case GET_PUBLIC_KEY:
-				String username = (String) json.get("username");
 				String id = usernames.entrySet()
 					.stream()
 					.filter(e -> e.getValue().equals(username))
