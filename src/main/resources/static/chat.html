@@ -6,16 +6,20 @@
 		<meta name="robots" content="noindex">
 		<title>crypto chat</title>
 
-		<style>html {font-family: monospace;}</style>
 		<script src="/chat.js" type="module" defer></script>
+		<link rel="stylesheet" href="/style.css">
 	</head>
 	<body>
-		<form id="chat-form">
-			<select id="chat-username"></select>
-			<input id="chat-text">
-			<button>send</button>
-		</form>
-
-		<ul id="username-list"></ul>
+		<div id="app">
+			<ul id="username-list"></ul>
+			<div id="chat">
+				<div id="chat-log"></div>
+				<form id="chat-form">
+					<div id="chat-to"></div>
+					<input id="chat-text">
+					<button>send</button>
+				</form>
+			</div>
+		</div>
 	</body>
 </html>

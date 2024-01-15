@@ -34,7 +34,9 @@ export default class Socket extends EventTarget {
 		this.socket.onerror = this.onError.bind(this);
 	}
 
-	async requestPublicKey(username) {
+	requestPublicKey(username) {
+		if (this.publicKeys.has(username)) return true;
+
 		let data = JSON.stringify({
 			type: GET_PUBLIC_KEY,
 			username,
@@ -78,12 +80,12 @@ export default class Socket extends EventTarget {
 			username: this.username,
 			publicKey: this.publicKey,
 		}));
-		this.write("opened!", "royalblue");
+		this.write("connected!", "royalblue");
 	}
 
 	onClose(event) {
 		this.write("closed!", "royalblue");
-		this.dispatchEvent(new CustomEvent("close" ));
+		this.dispatchEvent(new CustomEvent("close"));
 	}
 
 	async onMessage(event) {
@@ -114,9 +116,6 @@ export default class Socket extends EventTarget {
 			case GET_PUBLIC_KEY:
 				this.publicKeys.set(json.username, json.publicKey);
 
-				this.dispatchEvent(new CustomEvent("publickeys", {detail: {
-					usernames: Array.from(this.publicKeys.keys()),
-				}}));
 				this.write("received " + json.username + "'s public key", "orangered");
 				break;
 			case USERNAMES:
@@ -125,6 +124,7 @@ export default class Socket extends EventTarget {
 				break;
 			case CONNECT:
 				this.usernames.push(json.username);
+				this.write(json.username + " joined!", "mediumpurple");
 				this.dispatchEvent(new CustomEvent("usernames", {detail: {usernames: this.usernames}}));
 				break;
 			case CLOSE:
@@ -132,6 +132,8 @@ export default class Socket extends EventTarget {
 				if (~index) {
 					this.usernames.splice(index, 1);
 				}
+				this.publicKeys.delete(json.username);
+				this.write(json.username + " left!", "mediumpurple");
 				this.dispatchEvent(new CustomEvent("usernames", {detail: {usernames: this.usernames}}));
 				break;
 		}
