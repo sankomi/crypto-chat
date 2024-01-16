@@ -17,7 +17,15 @@ let username = params.get("username");
 let socket = new Socket(username);
 let user = null;
 socket.addEventListener("text", event => write(event.detail));
-socket.addEventListener("close", event => window.location = "/");
+socket.addEventListener("close", event => {
+	let reason = event.detail?.reason;
+
+	if (reason) {
+		window.location = `/?reason=${encodeURI(reason)}`;
+	} else {
+		window.location = "/";
+	}
+});
 socket.addEventListener("usernames", event => updateUsernames(event.detail));
 
 const chatForm = document.getElementById("chat-form");

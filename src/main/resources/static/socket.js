@@ -85,7 +85,7 @@ export default class Socket extends EventTarget {
 
 	onClose(event) {
 		this.write("closed!", "royalblue");
-		this.dispatchEvent(new CustomEvent("close"));
+		this.dispatchEvent(new CustomEvent("close", {detail: {reason: event.reason}}));
 	}
 
 	async onMessage(event) {

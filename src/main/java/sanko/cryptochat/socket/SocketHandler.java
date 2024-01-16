@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*; //CloseStatus, TextMessage, WebSocketSession
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 import org.springframework.boot.json.*; //JsonParser, JsonParserFactory
+import org.springframework.web.socket.CloseStatus;
 
 @Component
 public class SocketHandler extends TextWebSocketHandler {
@@ -34,21 +35,23 @@ public class SocketHandler extends TextWebSocketHandler {
 		String sessionId = session.getId();
 		String username = usernames.get(sessionId);
 
-		synchronized(sockets) {
-			sockets.entrySet().forEach(socket -> {
-				if (socket.getValue().getId().equals(sessionId)) return;
+		if (username != null) {
+			synchronized(sockets) {
+				sockets.entrySet().forEach(socket -> {
+					if (socket.getValue().getId().equals(sessionId)) return;
 
-				String closeString = String.format(
-					"{'type': '%s', 'username': '%s'}".replaceAll("'", "\""),
-					CLOSE, username
-				);
+					String closeString = String.format(
+						"{'type': '%s', 'username': '%s'}".replaceAll("'", "\""),
+						CLOSE, username
+					);
 
-				try {
-					socket.getValue().sendMessage(new TextMessage(closeString));
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-			});
+					try {
+						socket.getValue().sendMessage(new TextMessage(closeString));
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				});
+			}
 		}
 
 		sockets.remove(sessionId);
@@ -66,37 +69,49 @@ public class SocketHandler extends TextWebSocketHandler {
 
 		switch ((String) json.get("type")) {
 			case SEND_PUBLIC_KEY:
-				usernames.put(sessionId, username);
-				publicKeys.put(sessionId, (String) json.get("publicKey"));
-
-				synchronized(sockets) {
-					sockets.entrySet().forEach(socket -> {
-						if (socket.getValue().getId().equals(sessionId)) return;
-
-						String connectString = String.format(
-							"{'type': '%s', 'username': '%s'}".replaceAll("'", "\""),
-							CONNECT, username
-						);
-
-						try {
-							socket.getValue().sendMessage(new TextMessage(connectString));
-						} catch (IOException e) {
-							e.printStackTrace();
-						}
-					});
-				}
-
-				List<String> names = usernames.entrySet()
+				String duplicateUsername = usernames.entrySet()
 					.stream()
-					.filter(e -> !e.getKey().equals(sessionId))
-					.map(e -> String.format("\"%s\"", e.getValue()))
-					.collect(Collectors.toList());
-				String usernameString = String.format(
-					"{'type': '%s', 'usernames': [%s]}".replaceAll("'", "\""),
-					USERNAMES, String.join(",", names)
-				);
-				TextMessage usernameMessage = new TextMessage(usernameString);
-				session.sendMessage(usernameMessage);
+					.map(u -> u.getValue())
+					.filter(u -> u.equals(username))
+					.findAny()
+					.orElse(null);
+
+				if (duplicateUsername != null) {
+					CloseStatus status = CloseStatus.NORMAL.withReason("duplicate username");
+					session.close(status);
+				} else {
+					usernames.put(sessionId, username);
+					publicKeys.put(sessionId, (String) json.get("publicKey"));
+
+					synchronized(sockets) {
+						sockets.entrySet().forEach(socket -> {
+							if (socket.getValue().getId().equals(sessionId)) return;
+
+							String connectString = String.format(
+								"{'type': '%s', 'username': '%s'}".replaceAll("'", "\""),
+								CONNECT, username
+							);
+
+							try {
+								socket.getValue().sendMessage(new TextMessage(connectString));
+							} catch (IOException e) {
+								e.printStackTrace();
+							}
+						});
+					}
+
+					List<String> names = usernames.entrySet()
+						.stream()
+						.filter(e -> !e.getKey().equals(sessionId))
+						.map(e -> String.format("\"%s\"", e.getValue()))
+						.collect(Collectors.toList());
+					String usernameString = String.format(
+						"{'type': '%s', 'usernames': [%s]}".replaceAll("'", "\""),
+						USERNAMES, String.join(",", names)
+					);
+					TextMessage usernameMessage = new TextMessage(usernameString);
+					session.sendMessage(usernameMessage);
+				}
 				break;
 			case GET_PUBLIC_KEY:
 				String id = usernames.entrySet()

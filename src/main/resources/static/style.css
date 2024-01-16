@@ -34,12 +34,18 @@ button:focus, button.selected {
 	background-color: black;
 }
 
-#connect-form {
+#connect {
 	display: flex;
+	flex-direction: column;
 	justify-content: center;
 	align-items: center;
 	gap: 0.5rem;
 	height: 100%;
+}
+#connect-form {
+	display: flex;
+	justify-content: center;
+	gap: 0.5rem;
 }
 #app {
 	display: flex;
