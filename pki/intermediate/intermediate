@@ -1,0 +1,10 @@
+if ! test -f intermediate.key; then
+	openssl genrsa -aes256 -out intermediate.key 4096
+fi
+
+if ! test -f crts/intermediate.crt; then
+	openssl req -new -sha256 -key intermediate.key -out intermediate.csr
+	openssl x509 -req -sha256 -days 30 -in intermediate.csr -CA ../root/root.crt -CAkey ../root/root.key -CAcreateserial -out intermediate.crt -extfile intermediate.ext
+	rm intermediate.csr
+fi
+

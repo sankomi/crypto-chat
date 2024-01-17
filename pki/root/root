@@ -1,0 +1,10 @@
+if ! test -f root.key; then
+	openssl genrsa -aes256 -out root.key 4096;
+fi
+
+
+if ! test -f root.crt; then
+	openssl req -new -sha256 -key root.key -out root.csr
+	openssl x509 -req -sha256 -days 30 -in root.csr -signkey root.key -out root.crt -extfile root.ext
+	rm root.csr
+fi

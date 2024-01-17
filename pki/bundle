@@ -1,0 +1,1 @@
+cat end-entity/end-entity.crt intermediate/intermediate.crt root/root.crt > bundle.crt

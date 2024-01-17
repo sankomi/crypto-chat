@@ -1,0 +1,9 @@
+if ! test -f end-entity.key; then
+	openssl genrsa -out end-entity.key 4096
+fi
+
+if ! test -f crts/end-entity.crt; then
+	openssl req -new -sha256 -key end-entity.key -out end-entity.csr
+	openssl x509 -req -sha256 -days 30 -in end-entity.csr -CA ../intermediate/intermediate.crt -CAkey ../intermediate/intermediate.key -CAcreateserial -out end-entity.crt -extfile end-entity.ext
+	rm end-entity.csr
+fi
