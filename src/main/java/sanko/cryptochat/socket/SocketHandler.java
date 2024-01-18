@@ -18,6 +18,7 @@ public class SocketHandler extends TextWebSocketHandler {
 	private static final ConcurrentHashMap<String, String> usernames = new ConcurrentHashMap<>();
 	private static final ConcurrentHashMap<String, String> publicKeys = new ConcurrentHashMap<>();
 
+	private static final String PING = "ping";
 	private static final String USERNAMES = "usernames";
 	private static final String CONNECT = "connect";
 	private static final String CLOSE = "close";
@@ -68,6 +69,18 @@ public class SocketHandler extends TextWebSocketHandler {
 		String username = (String) json.get("username");
 
 		switch ((String) json.get("type")) {
+			case PING:
+				String pingString = String.format(
+					"{'type': '%s'}".replaceAll("'", "\""),
+					PING
+				);
+
+				try {
+					session.sendMessage(new TextMessage(pingString));
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+				break;
 			case SEND_PUBLIC_KEY:
 				String duplicateUsername = usernames.entrySet()
 					.stream()

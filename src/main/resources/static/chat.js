@@ -63,11 +63,11 @@ function updateUsernames({usernames}) {
 			if (user === username) {
 				user = null;
 				chatTo.textContent = "";
-				write({text: "using self public key!", colour: "teal"});
+				write({text: "[using no public key]", colour: "teal"});
 			} else {
 				user = username;
 				chatTo.textContent = username;
-				write({text: "using " + username + "'s public key!", colour: "teal"});
+				write({text: "[using " + username + "'s public key]", colour: "teal"});
 			}
 
 			document.querySelectorAll("#username-list button").forEach(button => {

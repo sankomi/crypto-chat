@@ -107,7 +107,7 @@ async function encryptAes(plain, key) {
 	let algorithm = {name: "AES-GCM"};
 	let arrayBuffer = getAesKeyArrayBuffer(key);
 	let importedKey = await crypto.subtle.importKey("raw", arrayBuffer, algorithm, true, ["encrypt"]);
-	let encoded = new TextEncoder().encode(plain).buffer;
+	let encoded = new TextEncoder().encode(encodeURI(plain)).buffer;
 	let random = crypto.getRandomValues(new Uint8Array(12));
 	let encrypted = await crypto.subtle.encrypt({...algorithm, iv: random}, importedKey, encoded);
 	let cipher = btoa(String.fromCharCode(...new Uint8Array(encrypted)));
@@ -130,5 +130,5 @@ async function decryptAes(cipher, key, iv) {
 		bytes[i] = string.charCodeAt(i);
 	}
 	let decrypted = await crypto.subtle.decrypt({...algorithm, iv: ivBytes.buffer}, importedKey, bytes.buffer);
-	return String.fromCharCode(...new Uint8Array(decrypted));
+	return decodeURI(String.fromCharCode(...new Uint8Array(decrypted)));
 }
