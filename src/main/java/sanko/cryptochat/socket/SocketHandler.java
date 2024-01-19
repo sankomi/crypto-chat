@@ -10,8 +10,10 @@ import org.springframework.web.socket.*; //CloseStatus, TextMessage, WebSocketSe
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 import org.springframework.boot.json.*; //JsonParser, JsonParserFactory
 import org.springframework.web.socket.CloseStatus;
+import lombok.extern.slf4j.Slf4j;
 
 @Component
+@Slf4j
 public class SocketHandler extends TextWebSocketHandler {
 
 	private static final ConcurrentHashMap<String, WebSocketSession> sockets = new ConcurrentHashMap<>();
@@ -28,12 +30,15 @@ public class SocketHandler extends TextWebSocketHandler {
 
 	@Override
 	public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+		String sessionId = session.getId();
 		sockets.put(session.getId(), session);
+		log.info(sessionId + " connect");
 	}
 
 	@Override
 	public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
 		String sessionId = session.getId();
+		log.info(sessionId + " close");
 		String username = usernames.get(sessionId);
 
 		if (username != null) {
@@ -46,11 +51,7 @@ public class SocketHandler extends TextWebSocketHandler {
 						CLOSE, username
 					);
 
-					try {
-						socket.getValue().sendMessage(new TextMessage(closeString));
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
+					send(socket.getValue(), new TextMessage(closeString));
 				});
 			}
 		}
@@ -75,11 +76,7 @@ public class SocketHandler extends TextWebSocketHandler {
 					PING
 				);
 
-				try {
-					session.sendMessage(new TextMessage(pingString));
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
+				send(session, new TextMessage(pingString));
 				break;
 			case SEND_PUBLIC_KEY:
 				String duplicateUsername = usernames.entrySet()
@@ -91,10 +88,13 @@ public class SocketHandler extends TextWebSocketHandler {
 
 				if (duplicateUsername != null) {
 					CloseStatus status = CloseStatus.NORMAL.withReason("duplicate username");
+					log.info(sessionId + " duplicate username = " + username);
 					session.close(status);
+					sockets.remove(sessionId);
 				} else {
 					usernames.put(sessionId, username);
 					publicKeys.put(sessionId, (String) json.get("publicKey"));
+					log.info(sessionId + " set username = " + username);
 
 					synchronized(sockets) {
 						sockets.entrySet().forEach(socket -> {
@@ -105,11 +105,7 @@ public class SocketHandler extends TextWebSocketHandler {
 								CONNECT, username
 							);
 
-							try {
-								socket.getValue().sendMessage(new TextMessage(connectString));
-							} catch (IOException e) {
-								e.printStackTrace();
-							}
+							send(socket.getValue(), new TextMessage(connectString));
 						});
 					}
 
@@ -123,10 +119,12 @@ public class SocketHandler extends TextWebSocketHandler {
 						USERNAMES, String.join(",", names)
 					);
 					TextMessage usernameMessage = new TextMessage(usernameString);
-					session.sendMessage(usernameMessage);
+					send(session, usernameMessage);
 				}
 				break;
 			case GET_PUBLIC_KEY:
+				log.info(sessionId + " request key for username = " + username);
+
 				String id = usernames.entrySet()
 					.stream()
 					.filter(e -> e.getValue().equals(username))
@@ -142,22 +140,29 @@ public class SocketHandler extends TextWebSocketHandler {
 						GET_PUBLIC_KEY, username, publicKey
 					);
 					TextMessage keyMessage = new TextMessage(string);
-					session.sendMessage(keyMessage);
+					send(session, keyMessage);
 				}
 				break;
 			case MESSAGE:
+				log.info(sessionId + " send message");
 				synchronized(sockets) {
 					sockets.entrySet().forEach(socket -> {
 						if (socket.getValue().getId().equals(sessionId)) return;
 
-						try {
-							socket.getValue().sendMessage(message);
-						} catch (IOException e) {
-							e.printStackTrace();
-						}
+						send(socket.getValue(), message);
 					});
 				}
 				break;
+		}
+	}
+
+	private void send(WebSocketSession session, TextMessage message) {
+		try {
+			if (session.isOpen()) {
+				session.sendMessage(message);
+			}
+		} catch (Exception e) {
+			log.error(session.getId() + " send message fail");
 		}
 	}
 
